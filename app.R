@@ -366,7 +366,7 @@ server <- function(input, output, server) {
              p("Note: confirmed cases vary due to testing procedures and other factors.", 
               a(href = "https://www.cdc.gov/coronavirus/2019-ncov/", "Check the CDC for more info.")),
              p("Last updated on", a(href="https://github.com/CSSEGISandData/COVID-19/commits/master/csse_covid_19_data", max(plot_data()$date))),
-             p("App by", a(href = 'lrdegeest.github.io', 'Lawrence De Geest')),
+             p("App by", a(href = 'https://lrdegeest.github.io/', 'Lawrence De Geest')),
              p("Code on", a(href = 'https://github.com/lrdegeest/covid19', 'Github.'), "MIT License. Feel free to clone/fork and modify.")
       ),
     )
