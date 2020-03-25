@@ -209,7 +209,6 @@ server <- function(input, output, server) {
     f = ifelse(url.exists(file_paths[[1]]) == TRUE, 
                file_paths[[1]],
                file_paths[[2]])
-    #f ="https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/03-23-2020.csv"
     # now load
     df = reactiveFileReader(intervalMillis = update_frequency, 
                             session = NULL,
