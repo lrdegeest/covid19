@@ -1,0 +1,13 @@
+name: covid19
+title: covid19
+username:
+account: lrdegeest
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1993936
+bundleId: 2923067
+url: https://lrdegeest.shinyapps.io/covid19/
+when: 1585150034.11056
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: demo.gif|README.md
