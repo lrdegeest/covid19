@@ -7,6 +7,7 @@ library(shiny)
 library(shinythemes)
 library(shinyWidgets)
 library(tidyverse)
+library(data.table)
 library(ggrepel)
 library(urbnmapr)
 library(cowplot)
@@ -55,7 +56,7 @@ ui <- navbarPage("COVID-19 Updates",
                               tags$style(".well {background-color:#060606;}"),
                               uiOutput("user_global_choice"), width = 3),
                             mainPanel(
-                              br(),
+                              br(),br(),
                               plotOutput("global_plot", width = "100%"))
                           ),
                  ),
@@ -68,8 +69,8 @@ ui <- navbarPage("COVID-19 Updates",
                             ),
                             
                             mainPanel(
-                              br(),
-                              DT::dataTableOutput("state_county_table", width = "90%"))
+                              br(),br(),
+                              DT::dataTableOutput("state_county_table", width = "80%"))
                           ),
                  ),
                  tabPanel("About",
@@ -225,20 +226,30 @@ server <- function(input, output, server) {
     return(df)
   }) # END LOAD DATA
   
+  # BEGIN MAP DATA
+  map_data = reactive({
+    map_data = left_join(df_usa(), territories_counties, by="county_fips")
+    return(map_data)
+  })
+  
+  dt = reactive({
+    dt = data.table(df_usa())
+    return(dt)
+  })
+  
   # BEGIN USA/STATE SUMMARY TABLES
   output$state_county_table = DT::renderDataTable(({
     req(input$user_state_choice)
     if(input$user_state_choice == "All") {
       d = df_usa() %>% 
-        select(state_name, Confirmed, Deaths, Last_Update) %>% 
+        select(state_name, Confirmed, Deaths) %>% 
         group_by(state_name) %>% 
-        gather(key = "variable", value, -c(state_name, Last_Update)) %>% 
-        group_by(state_name, variable, Last_Update) %>% 
+        gather(key = "variable", value, -c(state_name)) %>% 
+        group_by(state_name, variable) %>% 
         summarise(value = sum(value, na.rm = TRUE)) %>% 
         spread(variable, value) %>% 
-        select(state_name, Confirmed, Deaths, Last_Update) %>% 
-        mutate(Last_Update = format(as.Date(Last_Update), "%d-%m-%Y")) %>% 
-        rename("State/Territory" = state_name, "Last Updated" = Last_Update) %>% 
+        select(state_name, Confirmed, Deaths) %>% 
+        rename("State/Territory" = state_name) %>% 
         arrange(desc(Confirmed))
       d = DT::datatable(d,rownames= FALSE, 
                         options = list(
@@ -251,17 +262,16 @@ server <- function(input, output, server) {
       return(d)
     } else {
       d = df_usa() %>%
-        select(state_name, county_name, Confirmed, Deaths, Last_Update) %>% 
+        select(state_name, county_name, Confirmed, Deaths) %>% 
         filter(state_name == input$user_state_choice) %>% 
         droplevels() %>% 
         group_by(county_name) %>% 
-        gather(key = "variable", value, -c(state_name, county_name, Last_Update)) %>% 
-        group_by(state_name, county_name, variable, Last_Update) %>% 
+        gather(key = "variable", value, -c(state_name, county_name)) %>% 
+        group_by(state_name, county_name, variable) %>% 
         summarise(value = sum(value, na.rm = TRUE)) %>% 
         spread(variable, value) %>% 
-        select(state_name, county_name, Confirmed, Deaths, Last_Update) %>% 
-        mutate(Last_Update = format(as.Date(Last_Update), "%d-%m-%Y")) %>% 
-        rename("State" = state_name, "County" = county_name, "Last Updated" = Last_Update) %>% 
+        select(state_name, county_name, Confirmed, Deaths) %>% 
+        rename("State" = state_name, "County" = county_name) %>% 
         arrange(desc(Confirmed))
       d = DT::datatable(d,rownames= FALSE, 
                         options = list(
@@ -278,6 +288,7 @@ server <- function(input, output, server) {
   
   # BEGIN USA/STATE MAPS
   output$map_plot = renderPlot({
+    req(map_data())
     req(input$user_state_choice)
     if(input$user_state_choice %in% no_map_files) {
       # hack: empty plot to fill the background
@@ -287,8 +298,8 @@ server <- function(input, output, server) {
     } else if(input$user_state_choice == "All"){
       ## MAP
       df_states_summary = df_usa() %>% 
-        group_by(state_name) %>% 
-        summarise(Confirmed = sum(Confirmed))
+        group_by(state_name, Last_Update) %>% 
+        summarise(Confirmed = sum(Confirmed), Dead = sum(Deaths))
       map_data = left_join(df_states_summary, states_sf, by = "state_name")
       map_plot = map_data %>% 
         ggplot(aes(geometry = geometry)) +
@@ -297,6 +308,10 @@ server <- function(input, output, server) {
         coord_sf(datum = NA) + 
         scale_fill_gradient(low = "gray", high = "#FF4136", na.value = NA) + 
         theme_void() + 
+        labs(title = paste0(scales::comma(sum(map_data$Confirmed)), " Confirmed"),
+             subtitle = paste0(scales::comma(sum(map_data$Dead))," Dead\n"))+
+        theme(plot.title = element_text(colour = "#FF4136", size=20, face="bold"),
+              plot.subtitle = element_text(colour = "#85144b", size=20, face="bold")) + 
         theme(plot.background = element_rect(fill = "#060606")) + 
         theme(legend.text = element_text(colour="white", size = 10, face = "bold", angle=30, vjust=0.75),
               legend.title = element_blank(),
@@ -305,18 +320,23 @@ server <- function(input, output, server) {
       cowplot::plot_grid(map_plot,ncol=1) + 
         theme(plot.background = element_rect(fill = "#060606"))
     } else {
-      map_data = left_join(df_usa(), territories_counties, by="county_fips")
-      map_plot = map_data %>%
-        filter(state_name == input$user_state_choice) %>% 
+      state_map_data = map_data() %>% 
+        filter(state_name == input$user_state_choice) 
+      map_plot = state_map_data %>%
         ggplot(aes(geometry = geometry)) +
         geom_sf(mapping = aes(fill = Confirmed),
                 color = "#3D9970", size = 0.05) +
         coord_sf(datum = NA) + 
         scale_fill_gradient(low = "gray", high = "#FF4136", na.value = NA) + 
         theme_void() + 
+        labs(title = paste0(scales::comma(sum(state_map_data$Confirmed)), " Confirmed"), 
+        subtitle = paste0(scales::comma(sum(state_map_data$Deaths)), " Dead")
+        ) +
+        theme(plot.title = element_text(colour = "#FF4136", size=20),
+              plot.subtitle = element_text(colour = "#85144b", size=20, face="bold")
+              ) + 
         theme(plot.background = element_rect(fill = "#060606")) + 
         theme(legend.text = element_text(colour="white", size = 10, face = "bold", angle=0, vjust=0.75),
-              #legend.title = element_blank(),
               legend.key.width=unit(1,"cm")) + 
         theme(legend.position="bottom")
       cowplot::plot_grid(map_plot,ncol=1) + 
@@ -332,7 +352,7 @@ server <- function(input, output, server) {
     choices = c("Global",unique(as.character(unique(plot_data()$Country.Region))))
     names(choices) = c("Global",unique(as.character(unique(plot_data()$Country.Region))))
     fluidRow(
-      #h4("Country/Region:"),
+      p("Last updated on", a(href="https://github.com/CSSEGISandData/COVID-19/commits/master/csse_covid_19_data", max(plot_data()$date))),
       selectInput("user_global_choice", 
                   label = "",
                   choices = choices,
@@ -349,19 +369,19 @@ server <- function(input, output, server) {
     state_choices = c("All", unique(as.character(unique(df_usa()$state_name))))
     names(state_choices) = c("All" , unique(as.character(df_usa()$state_name)))
     fluidRow(
-      #h4("Country/Region:"),
+      p("Last updated on", a(href="https://github.com/CSSEGISandData/COVID-19/commits/master/csse_covid_19_data", max(plot_data()$date))),
       selectInput("user_state_choice", 
                   label = "",
                   choices = state_choices,
                   selected="All")
     )
-  }) # enD USA UI
+  }) # end USA UI
   
   # BEGIN ABOUT UI
   output$about <- renderUI({
     fluidRow(
       column(12,
-             #h5("About"),
+             br(),
              p("Daily data from", a(href = 'https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data', 'Johns Hopkins CSSEGIS')),
              p("Note: confirmed cases vary due to testing procedures and other factors.", 
               a(href = "https://www.cdc.gov/coronavirus/2019-ncov/", "Check the CDC for more info.")),
