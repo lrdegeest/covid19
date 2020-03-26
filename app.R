@@ -33,6 +33,20 @@ reshape_data = function(d,name) {
 # names to pass to reshape data function
 names = c("Confirmed", "Dead")
 
+# plot theme
+time_series_theme = 
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "#060606",
+                                    colour = "#060606",
+                                    size = 0.5, linetype = "solid"),
+    plot.background = element_rect(fill = "#060606"),
+    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
+                                    colour = "grey20"), 
+    panel.grid.minor = element_line(size = 0.25, linetype = 'solid',
+                                    colour = "grey20")
+  ) 
+
 # USA MAP DATA SETUP ------------------------------------------------------
 # load territory+county map data
 territories_counties = urbnmapr::get_urbn_map("territories_counties", sf=TRUE)
@@ -54,7 +68,7 @@ ui <- navbarPage("COVID-19 Updates",
                           sidebarLayout(
                             sidebarPanel(
                               tags$style(".well {background-color:#060606;}"),
-                              uiOutput("user_global_choice"), width = 3),
+                              uiOutput("user_global_choice"), width = 2),
                             mainPanel(
                               br(),br(),
                               plotOutput("global_plot", width = "100%"))
@@ -63,8 +77,10 @@ ui <- navbarPage("COVID-19 Updates",
                  tabPanel("United States",
                           sidebarLayout(
                             sidebarPanel(
-                              tags$style(".well {background-color:#060606;}"),
-                              uiOutput("user_state_choice", width = 2),
+                              tags$style("
+                              .well {background-color:#060606;}
+                              "),
+                              uiOutput("user_state_choice", width = 1),
                               plotOutput("map_plot")
                             ),
                             
@@ -164,25 +180,16 @@ server <- function(input, output, server) {
   
   # BEGIN GLOBAL/COUNTRY PLOT(S)
   output$global_plot <- renderPlot({
-    suppressWarnings(
-      ggplot(filter_plot_data(), aes(date, value, group=variable,color=variable)) + 
+    p1 = filter_plot_data() %>% 
+      filter(variable == "Confirmed") %>% 
+      ggplot(., aes(date, value, group=variable,color=variable)) + 
         geom_point(size=2, alpha=0.6) +
         geom_line() +
-        scale_color_manual(values=c("#FF4136","#85144b")) + 
-        scale_fill_manual(values=c("#FF4136","#85144b")) +
-        theme_minimal() +
-        theme(
-          panel.background = element_rect(fill = "#060606",
-                                          colour = "#060606",
-                                          size = 0.5, linetype = "solid"),
-          plot.background = element_rect(fill = "#060606"),
-          panel.grid.major = element_line(size = 0.5, linetype = 'solid',
-                                          colour = "grey20"), 
-          panel.grid.minor = element_line(size = 0.25, linetype = 'solid',
-                                          colour = "grey20")
-        ) +
+        time_series_theme + 
+        scale_color_manual(values=c("#FF4136")) + 
+        scale_fill_manual(values=c("#FF4136")) +
         labs(x="",y="") + 
-        scale_y_continuous(labels = scales::comma_format(digits=0)) +
+        scale_y_continuous(labels=scales::comma) +
         scale_x_date(date_breaks = "1 week", date_labels ="%b %d") +
         theme(text = element_text(size=18), legend.position = "none") +
         theme(axis.text.x=element_text(angle=45,vjust=.8, hjust=0.8, color="white")) + 
@@ -193,7 +200,27 @@ server <- function(input, output, server) {
                                   segment.size  = 0.2,
                                   segment.color = "grey50",
                                   direction     = "y")
-    )
+    p2 = filter_plot_data() %>% 
+      filter(variable == "Dead") %>% 
+      ggplot(., aes(date, value, group=variable,color=variable)) + 
+      geom_point(size=2, alpha=0.6) +
+      geom_line() +
+      time_series_theme + 
+      scale_color_manual(values=c("#85144b")) + 
+      scale_fill_manual(values=c("#85144b")) +
+      labs(x="",y="") + 
+      scale_y_continuous(labels=scales::comma) +
+      scale_x_date(date_breaks = "1 week", date_labels ="%b %d") +
+      theme(text = element_text(size=18), legend.position = "none") +
+      theme(axis.text.x=element_text(angle=45,vjust=.8, hjust=0.8, color="white")) + 
+      theme(axis.text.y=element_text(color="white", angle=0)) + 
+      ggrepel::geom_label_repel(aes(label = max_value,fill=variable),
+                                color="white",size=5,fontface="bold", na.rm = T,
+                                nudge_x = 10,
+                                segment.size  = 0.2,
+                                segment.color = "grey50",
+                                direction     = "y")
+    cowplot::plot_grid(p1, p2, ncol=2)
   }) # END GLOBAL/COUNTRY PLOT(S)
   # END TIME SERIES DATA + PLOT
   
@@ -240,7 +267,7 @@ server <- function(input, output, server) {
   # BEGIN USA/STATE SUMMARY TABLES
   output$state_county_table = DT::renderDataTable(({
     req(input$user_state_choice)
-    if(input$user_state_choice == "All") {
+    if(input$user_state_choice == "All States") {
       d = df_usa() %>% 
         select(state_name, Confirmed, Deaths) %>% 
         group_by(state_name) %>% 
@@ -295,7 +322,7 @@ server <- function(input, output, server) {
       ggplot() + 
         theme_void() + 
         theme(plot.background = element_rect(fill = "#060606")) 
-    } else if(input$user_state_choice == "All"){
+    } else if(input$user_state_choice == "All States"){
       ## MAP
       df_states_summary = df_usa() %>% 
         group_by(state_name, Last_Update) %>% 
@@ -366,14 +393,14 @@ server <- function(input, output, server) {
   
   # BEGIN USA UI
   output$user_state_choice <- renderUI({
-    state_choices = c("All", unique(as.character(unique(df_usa()$state_name))))
-    names(state_choices) = c("All" , unique(as.character(df_usa()$state_name)))
+    state_choices = c("All States", unique(as.character(unique(df_usa()$state_name))))
+    names(state_choices) = c("All States" , unique(as.character(df_usa()$state_name)))
     fluidRow(
       p("Last updated on", a(href="https://github.com/CSSEGISandData/COVID-19/commits/master/csse_covid_19_data", max(plot_data()$date))),
       selectInput("user_state_choice", 
                   label = "",
                   choices = state_choices,
-                  selected="All")
+                  selected="All States")
     )
   }) # end USA UI
   

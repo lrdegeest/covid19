@@ -5,9 +5,9 @@ account: lrdegeest
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 1993936
-bundleId: 2923067
+bundleId: 2928952
 url: https://lrdegeest.shinyapps.io/covid19/
-when: 1585150034.11056
+when: 1585252492.48963
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: demo.gif|README.md
+ignoredFiles: demo.gif|LICENSE|README.md
